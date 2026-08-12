@@ -54,6 +54,19 @@ const SEED_DATA = {
   ]
 };
 
+// Immediate console debug to prove the script is executing
+try { console.log('DEBUG IMMEDIATE: meal-picker/app.js loaded'); } catch (e) {}
+window.addEventListener('error', (ev) => {
+  try {
+    console.error('DEBUG ERROR:', ev && (ev.message || ev.error));
+    const el = document.getElementById('debugLog');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = (el.textContent ? el.textContent + '\n' : '') + 'SCRIPT ERROR: ' + (ev && (ev.message || ev.error) ? (ev.message || String(ev.error)) : 'unknown');
+    }
+  } catch (e) {}
+});
+
 let APP_DATA = { keywords: [], meals: [] };
 
 const MEAL_SIZES = ['light', 'medium', 'heavy', 'feast'];
@@ -1357,3 +1370,15 @@ refreshGameFilterChips();
 refreshRandomFilterChips();
 resetMealForm();
 renderBrowse();
+
+// Immediate test message so the debug area visibly confirms the script ran
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const el = document.getElementById('debugLog');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = 'DEBUG TEST: script loaded and DOMContentLoaded fired.';
+    }
+  } catch (e) { /* ignore */ }
+  try { console.log('DEBUG TEST: script loaded and DOMContentLoaded fired.'); } catch (e) {}
+});
