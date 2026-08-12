@@ -294,14 +294,49 @@ function createMealCard(meal) {
 
   if (meal.image && meal.image.src) {
     const img = document.createElement('img');
+    img.className = 'meal-card-image';
+    img.src = meal.image.src;
+    img.alt = meal.name;
+    card.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'meal-card-image-placeholder';
+    ph.textContent = '\uD83C\uDF7D';
+    card.appendChild(ph);
+  }
 
+  const body = document.createElement('div');
+  body.className = 'meal-card-body';
+
+  const name = document.createElement('div');
+  name.className = 'meal-card-name';
+  name.textContent = meal.name;
+  body.appendChild(name);
+
+  if (meal.ingredients && meal.ingredients.length) {
+    const ing = document.createElement('div');
+    ing.className = 'meal-card-ingredients';
+    ing.textContent = meal.ingredients.join(', ');
+    body.appendChild(ing);
+  }
+
+  if (meal.keywords && meal.keywords.length) {
+    const kw = document.createElement('div');
+    kw.className = 'meal-card-keywords';
+    kw.innerHTML = meal.keywords.map(k => `<span>${escapeHtml(k)}</span>`).join('');
+    body.appendChild(kw);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'meal-card-meta';
+  meta.innerHTML = `
     <div class="meal-card-extra">
       <span class="meal-card-cal">${meal.calories ? escapeHtml(meal.calories) + ' cal' : ''}</span>
       ${meal.duration ? `<span class="meal-card-duration">\u23f1 ${escapeHtml(meal.duration)}</span>` : ''}
     </div>
     <div class="meal-card-extra">
       ${meal.size ? `<span class="meal-card-size">${escapeHtml(meal.size)}</span>` : ''}
-      <span class="meal-card-types">${meal.mealTypes.length ? escapeHtml(meal.mealTypes.join(' / ')) : 'unassigned'}</span>
+      <span class="meal-card-types">${meal.mealTypes && meal.mealTypes.length ? escapeHtml(meal.mealTypes.join(' / ')) : 'unassigned'}</span>
     </div>
   `;
   body.appendChild(meta);
