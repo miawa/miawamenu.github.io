@@ -76,6 +76,15 @@ function normalizeMeals() {
   });
 }
 
+function debugLog(msg) {
+  try { console.debug(msg); } catch (e) { }
+  const el = document.getElementById('debugLog');
+  if (el) {
+    el.style.display = 'block';
+    el.textContent = (el.textContent ? el.textContent + '\n' : '') + msg;
+  }
+}
+
 const game = { pairs: [], pairIndex: 0, nextPool: [], roundNum: 1, totalRounds: 1, allPicks: [] };
 
 const randomGame = { pool: [], remaining: [], keywordScores: {}, mealRatings: {}, currentMeal: null, lastMealId: null };
@@ -89,12 +98,14 @@ function loadData() {
       APP_DATA = JSON.parse(raw);
       normalizeMeals();
       document.getElementById('storageHint').textContent = 'loaded from this browser\u2019s saved copy.';
+        debugLog('loadData: loaded from localStorage (' + APP_DATA.meals.length + ' meals)');
       return;
     }
   } catch (e) { /* fall through to seed */ }
   APP_DATA = JSON.parse(JSON.stringify(SEED_DATA));
   normalizeMeals();
   document.getElementById('storageHint').textContent = 'showing example meals \u2014 export/import to use your own file.';
+  debugLog('loadData: no localStorage, using SEED_DATA (' + APP_DATA.meals.length + ' meals)');
 }
 
 // Try to load a repository-hosted copy of the menu so GitHub Pages can
@@ -104,9 +115,11 @@ function loadData() {
 (function tryLoadRemoteMenu() {
   // add a timestamp query param to avoid aggressive caching on Pages
   const url = 'the-menu-data.json?ts=' + Date.now();
+  debugLog('tryLoadRemoteMenu: attempting fetch ' + url);
   fetch(url, { cache: 'no-store' })
     .then(resp => {
-      if (!resp.ok) throw new Error('no remote menu');
+      debugLog('tryLoadRemoteMenu: fetch returned ' + resp.status + ' ' + resp.statusText);
+      if (!resp.ok) throw new Error('no remote menu: ' + resp.status);
       return resp.json();
     })
     .then(parsed => {
@@ -115,10 +128,11 @@ function loadData() {
       normalizeMeals();
       // do not overwrite the user's saved local copy — just show the repo menu
       document.getElementById('storageHint').textContent = 'loaded from repository file.';
+      debugLog('tryLoadRemoteMenu: loaded repository file (' + APP_DATA.meals.length + ' meals)');
       refreshEverything();
     })
-    .catch(() => {
-      // remote file not present or invalid — silently ignore
+    .catch((err) => {
+      debugLog('tryLoadRemoteMenu: fetch failed — ' + (err && err.message ? err.message : 'unknown error'));
     });
 })();
 
