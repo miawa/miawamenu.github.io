@@ -113,27 +113,46 @@ function loadData() {
 // background and will replace whatever was loaded from localStorage
 // or the seed data when successful.
 (function tryLoadRemoteMenu() {
-  // add a timestamp query param to avoid aggressive caching on Pages
-  const url = 'the-menu-data.json?ts=' + Date.now();
-  debugLog('tryLoadRemoteMenu: attempting fetch ' + url);
-  fetch(url, { cache: 'no-store' })
-    .then(resp => {
-      debugLog('tryLoadRemoteMenu: fetch returned ' + resp.status + ' ' + resp.statusText);
-      if (!resp.ok) throw new Error('no remote menu: ' + resp.status);
-      return resp.json();
-    })
-    .then(parsed => {
-      if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.keywords)) throw new Error('bad shape');
-      APP_DATA = parsed;
-      normalizeMeals();
-      // do not overwrite the user's saved local copy — just show the repo menu
-      document.getElementById('storageHint').textContent = 'loaded from repository file.';
-      debugLog('tryLoadRemoteMenu: loaded repository file (' + APP_DATA.meals.length + ' meals)');
-      refreshEverything();
-    })
-    .catch((err) => {
-      debugLog('tryLoadRemoteMenu: fetch failed — ' + (err && err.message ? err.message : 'unknown error'));
-    });
+  // try a few likely locations for the repo copy so Pages setups work
+  const candidates = [
+    'the-menu-data.json',
+    'meal-picker/the-menu-data.json',
+    '/meal-picker/the-menu-data.json'
+  ];
+
+  function tryNext(i) {
+    if (i >= candidates.length) { debugLog('tryLoadRemoteMenu: no remote menu found'); return; }
+    const url = candidates[i] + '?ts=' + Date.now();
+    debugLog('tryLoadRemoteMenu: attempting fetch ' + url);
+    fetch(url, { cache: 'no-store' })
+      .then(resp => {
+        debugLog('tryLoadRemoteMenu: fetch ' + candidates[i] + ' returned ' + resp.status);
+        if (!resp.ok) {
+          tryNext(i + 1);
+          return null;
+        }
+        return resp.json();
+      })
+      .then(parsed => {
+        if (!parsed) return;
+        if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.keywords)) {
+          debugLog('tryLoadRemoteMenu: bad shape at ' + candidates[i]);
+          tryNext(i + 1);
+          return;
+        }
+        APP_DATA = parsed;
+        normalizeMeals();
+        document.getElementById('storageHint').textContent = 'loaded from repository file.';
+        debugLog('tryLoadRemoteMenu: loaded repository file from ' + candidates[i] + ' (' + APP_DATA.meals.length + ' meals)');
+        refreshEverything();
+      })
+      .catch((err) => {
+        debugLog('tryLoadRemoteMenu: fetch error for ' + candidates[i] + ' — ' + (err && err.message ? err.message : 'unknown'));
+        tryNext(i + 1);
+      });
+  }
+
+  tryNext(0);
 })();
 
 function persist() {
