@@ -1382,3 +1382,39 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (e) { /* ignore */ }
   try { console.log('DEBUG TEST: script loaded and DOMContentLoaded fired.'); } catch (e) {}
 });
+
+// Create a prominent visual debug banner so it's impossible to miss
+function showVisualDebug(msg) {
+  try {
+    let b = document.getElementById('debugBanner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'debugBanner';
+      b.style.position = 'fixed';
+      b.style.left = '0';
+      b.style.right = '0';
+      b.style.top = '0';
+      b.style.zIndex = '9999';
+      b.style.background = '#c62828';
+      b.style.color = 'white';
+      b.style.fontWeight = '700';
+      b.style.padding = '6px 12px';
+      b.style.fontFamily = 'sans-serif';
+      b.style.textAlign = 'center';
+      b.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+      document.documentElement.appendChild(b);
+    }
+    b.textContent = msg;
+    setTimeout(() => { try { b.style.display = 'none'; } catch (e) {} }, 10000);
+  } catch (e) { /* ignore */ }
+}
+
+window.addEventListener('load', () => {
+  try {
+    const ts = new Date().toISOString();
+    const msg = 'DEBUG LOADED: app.js executed — ' + ts;
+    try { console.log(msg); } catch (e) {}
+    debugLog(msg);
+    showVisualDebug(msg);
+  } catch (e) {}
+});
