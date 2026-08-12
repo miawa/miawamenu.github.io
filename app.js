@@ -54,6 +54,19 @@ const SEED_DATA = {
   ]
 };
 
+// Immediate console debug to prove the script is executing
+try { console.log('DEBUG IMMEDIATE: meal-picker/app.js loaded'); } catch (e) {}
+window.addEventListener('error', (ev) => {
+  try {
+    console.error('DEBUG ERROR:', ev && (ev.message || ev.error));
+    const el = document.getElementById('debugLog');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = (el.textContent ? el.textContent + '\n' : '') + 'SCRIPT ERROR: ' + (ev && (ev.message || ev.error) ? (ev.message || String(ev.error)) : 'unknown');
+    }
+  } catch (e) {}
+});
+
 let APP_DATA = { keywords: [], meals: [] };
 
 const MEAL_SIZES = ['light', 'medium', 'heavy', 'feast'];
@@ -76,6 +89,15 @@ function normalizeMeals() {
   });
 }
 
+function debugLog(msg) {
+  try { console.debug(msg); } catch (e) { }
+  const el = document.getElementById('debugLog');
+  if (el) {
+    el.style.display = 'block';
+    el.textContent = (el.textContent ? el.textContent + '\n' : '') + msg;
+  }
+}
+
 const game = { pairs: [], pairIndex: 0, nextPool: [], roundNum: 1, totalRounds: 1, allPicks: [] };
 
 const randomGame = { pool: [], remaining: [], keywordScores: {}, mealRatings: {}, currentMeal: null, lastMealId: null };
@@ -89,13 +111,62 @@ function loadData() {
       APP_DATA = JSON.parse(raw);
       normalizeMeals();
       document.getElementById('storageHint').textContent = 'loaded from this browser\u2019s saved copy.';
+        debugLog('loadData: loaded from localStorage (' + APP_DATA.meals.length + ' meals)');
       return;
     }
   } catch (e) { /* fall through to seed */ }
   APP_DATA = JSON.parse(JSON.stringify(SEED_DATA));
   normalizeMeals();
   document.getElementById('storageHint').textContent = 'showing example meals \u2014 export/import to use your own file.';
+  debugLog('loadData: no localStorage, using SEED_DATA (' + APP_DATA.meals.length + ' meals)');
 }
+
+// Try to load a repository-hosted copy of the menu so GitHub Pages can
+// display the latest menu in the repo. This fetch runs in the
+// background and will replace whatever was loaded from localStorage
+// or the seed data when successful.
+(function tryLoadRemoteMenu() {
+  // try a few likely locations for the repo copy so Pages setups work
+  const candidates = [
+    'the-menu-data.json',
+    'meal-picker/the-menu-data.json',
+    '/meal-picker/the-menu-data.json'
+  ];
+
+  function tryNext(i) {
+    if (i >= candidates.length) { debugLog('tryLoadRemoteMenu: no remote menu found'); return; }
+    const url = candidates[i] + '?ts=' + Date.now();
+    debugLog('tryLoadRemoteMenu: attempting fetch ' + url);
+    fetch(url, { cache: 'no-store' })
+      .then(resp => {
+        debugLog('tryLoadRemoteMenu: fetch ' + candidates[i] + ' returned ' + resp.status);
+        if (!resp.ok) {
+          tryNext(i + 1);
+          return null;
+        }
+        return resp.json();
+      })
+      .then(parsed => {
+        if (!parsed) return;
+        if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.keywords)) {
+          debugLog('tryLoadRemoteMenu: bad shape at ' + candidates[i]);
+          tryNext(i + 1);
+          return;
+        }
+        APP_DATA = parsed;
+        normalizeMeals();
+        document.getElementById('storageHint').textContent = 'loaded from repository file.';
+        debugLog('tryLoadRemoteMenu: loaded repository file from ' + candidates[i] + ' (' + APP_DATA.meals.length + ' meals)');
+        refreshEverything();
+      })
+      .catch((err) => {
+        debugLog('tryLoadRemoteMenu: fetch error for ' + candidates[i] + ' — ' + (err && err.message ? err.message : 'unknown'));
+        tryNext(i + 1);
+      });
+  }
+
+  tryNext(0);
+})();
 
 function persist() {
   try {
@@ -1299,3 +1370,15 @@ refreshGameFilterChips();
 refreshRandomFilterChips();
 resetMealForm();
 renderBrowse();
+
+// Immediate test message so the debug area visibly confirms the script ran
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const el = document.getElementById('debugLog');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = 'DEBUG TEST: script loaded and DOMContentLoaded fired.';
+    }
+  } catch (e) { /* ignore */ }
+  try { console.log('DEBUG TEST: script loaded and DOMContentLoaded fired.'); } catch (e) {}
+});

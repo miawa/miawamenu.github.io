@@ -125,6 +125,9 @@ input { font-family: var(--font-body); }
 .io-btn:hover { border-color: var(--accent-mustard); }
 .nav-io-hint { font-size: 0.72rem; color: var(--text-faint); line-height: 1.4; }
 
+/* debug log shown in the sidebar when enabled by the app */
+.debug-log-visible { display: block !important; color: var(--text-faint); }
+
 /* ============ BOTTOM NAV (mobile) ============ */
 .bottom-nav { display: none; }
 
