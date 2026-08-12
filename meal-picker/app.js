@@ -1,210 +1,4 @@
-/* ============================================================
-   THE MENU — a personal meal picker
-   All data lives in memory + localStorage cache.
-   Use Export / Import in the sidebar to save a portable file.
-   ============================================================ */
-
-const STORAGE_KEY = 'themenu_data_v1';
-
-const SEED_DATA = {
-  keywords: ['fresh', 'warm', 'crunchy', 'creamy', 'simple', 'comforting'],
-  meals: [
-    {
-      id: 'seed-1',
-      name: 'Buttered toast',
-      ingredients: ['bread', 'butter'],
-      nutrients: [{ label: 'Carbs', value: '28g' }, { label: 'Fat', value: '9g' }],
-      calories: '190',
-      duration: '5 min',
-      mealTypes: ['breakfast', 'snack'],
-      size: 'light',
-      keywords: ['warm', 'simple', 'comforting'],
-      image: null,
-      favorite: true,
-      considering: false
-    },
-    {
-      id: 'seed-2',
-      name: 'Plain pasta with butter',
-      ingredients: ['pasta', 'butter', 'salt'],
-      nutrients: [{ label: 'Carbs', value: '52g' }],
-      calories: '320',
-      duration: '15 min',
-      mealTypes: ['lunch', 'dinner'],
-      size: 'medium',
-      keywords: ['warm', 'simple', 'comforting'],
-      image: null,
-      favorite: false,
-      considering: false
-    },
-    {
-      id: 'seed-3',
-      name: 'Vanilla yogurt',
-      ingredients: ['yogurt'],
-      nutrients: [{ label: 'Protein', value: '6g' }],
-      calories: '120',
-      duration: '1 min',
-      mealTypes: ['snack', 'breakfast'],
-      size: 'light',
-      keywords: ['creamy', 'fresh'],
-      image: null,
-      favorite: false,
-      considering: false
-    }
-  ]
-};
-
-// Immediate console debug to prove the script is executing
-try { console.log('DEBUG IMMEDIATE: meal-picker/app.js loaded'); } catch (e) {}
-window.addEventListener('error', (ev) => {
-  try {
-    console.error('DEBUG ERROR:', ev && (ev.message || ev.error));
-    const el = document.getElementById('debugLog');
-    if (el) {
-      el.style.display = 'block';
-      el.textContent = (el.textContent ? el.textContent + '\n' : '') + 'SCRIPT ERROR: ' + (ev && (ev.message || ev.error) ? (ev.message || String(ev.error)) : 'unknown');
-    }
-  } catch (e) {}
-});
-
-let APP_DATA = { keywords: [], meals: [] };
-
-const MEAL_SIZES = ['light', 'medium', 'heavy', 'feast'];
-
-const filters = { search: '', types: new Set(), keywords: new Set(), sizes: new Set() };
-const gameFilters = { types: new Set(), keywords: new Set(), sizes: new Set() };
-const randomFilters = { types: new Set(), keywords: new Set(), sizes: new Set() };
-let formImage = null; // { type: 'upload'|'url', src }
-let formSelectedKeywords = new Set();
-let editingId = null;
-let sessionNewKeywords = []; // keywords newly created during the current add/edit form session
-
-// meals imported from an older export (or the sample file) may be missing
-// newer fields entirely — fill them in so nothing downstream trips on undefined
-function normalizeMeals() {
-  APP_DATA.meals.forEach(m => {
-    if (typeof m.duration !== 'string') m.duration = '';
-    if (!MEAL_SIZES.includes(m.size)) m.size = null;
-    if (typeof m.considering !== 'boolean') m.considering = false;
-  });
-}
-
-function debugLog(msg) {
-  try { console.debug(msg); } catch (e) { }
-  const el = document.getElementById('debugLog');
-  if (el) {
-    el.style.display = 'block';
-    el.textContent = (el.textContent ? el.textContent + '\n' : '') + msg;
-  }
-}
-
-const game = { pairs: [], pairIndex: 0, nextPool: [], roundNum: 1, totalRounds: 1, allPicks: [] };
-
-const randomGame = { pool: [], remaining: [], keywordScores: {}, mealRatings: {}, currentMeal: null, lastMealId: null };
-
-/* ============ PERSISTENCE ============ */
-
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      APP_DATA = JSON.parse(raw);
-      normalizeMeals();
-      document.getElementById('storageHint').textContent = 'loaded from this browser\u2019s saved copy.';
-        debugLog('loadData: loaded from localStorage (' + APP_DATA.meals.length + ' meals)');
-      return;
-    }
-  } catch (e) { /* fall through to seed */ }
-  APP_DATA = JSON.parse(JSON.stringify(SEED_DATA));
-  normalizeMeals();
-  document.getElementById('storageHint').textContent = 'showing example meals \u2014 export/import to use your own file.';
-  debugLog('loadData: no localStorage, using SEED_DATA (' + APP_DATA.meals.length + ' meals)');
-}
-
-// Try to load a repository-hosted copy of the menu so GitHub Pages can
-// display the latest menu in the repo. This fetch runs in the
-// background and will replace whatever was loaded from localStorage
-// or the seed data when successful.
-(function tryLoadRemoteMenu() {
-  // try a few likely locations for the repo copy so Pages setups work
-  const candidates = [
-    'the-menu-data.json',
-    'meal-picker/the-menu-data.json',
-    '/meal-picker/the-menu-data.json'
-  ];
-
-  function tryNext(i) {
-    if (i >= candidates.length) { debugLog('tryLoadRemoteMenu: no remote menu found'); return; }
-    const url = candidates[i] + '?ts=' + Date.now();
-    debugLog('tryLoadRemoteMenu: attempting fetch ' + url);
-    fetch(url, { cache: 'no-store' })
-      .then(resp => {
-        debugLog('tryLoadRemoteMenu: fetch ' + candidates[i] + ' returned ' + resp.status);
-        if (!resp.ok) {
-          tryNext(i + 1);
-          return null;
-        }
-        return resp.json();
-      })
-      .then(parsed => {
-        if (!parsed) return;
-        if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.keywords)) {
-          debugLog('tryLoadRemoteMenu: bad shape at ' + candidates[i]);
-          tryNext(i + 1);
-          return;
-        }
-        APP_DATA = parsed;
-        normalizeMeals();
-        document.getElementById('storageHint').textContent = 'loaded from repository file.';
-        debugLog('tryLoadRemoteMenu: loaded repository file from ' + candidates[i] + ' (' + APP_DATA.meals.length + ' meals)');
-        refreshEverything();
-      })
-      .catch((err) => {
-        debugLog('tryLoadRemoteMenu: fetch error for ' + candidates[i] + ' — ' + (err && err.message ? err.message : 'unknown'));
-        tryNext(i + 1);
-      });
-  }
-
-  tryNext(0);
-})();
-
-function persist() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(APP_DATA));
-  } catch (e) { /* storage full or unavailable, ignore silently */ }
-}
-
-function exportData() {
-  const blob = new Blob([JSON.stringify(APP_DATA, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'the-menu-data.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function importData(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      if (!parsed || !Array.isArray(parsed.meals) || !Array.isArray(parsed.keywords)) {
-        throw new Error('bad shape');
-      }
-      APP_DATA = parsed;
-      normalizeMeals();
-      persist();
-      document.getElementById('storageHint').textContent = 'loaded from imported file.';
-      refreshEverything();
-    } catch (e) {
-      alert('That file doesn\u2019t look like a valid "the menu" export. Nothing was changed.');
-    }
-  };
-  reader.readAsText(file);
-}
+/* File synced with root app.js (debug banner removed) */
 
 /* ============ UTIL ============ */
 
@@ -313,14 +107,14 @@ function createMealCard(meal) {
   name.textContent = meal.name;
   body.appendChild(name);
 
-  if (meal.ingredients && meal.ingredients.length) {
+  if (meal.ingredients.length) {
     const ing = document.createElement('div');
     ing.className = 'meal-card-ingredients';
     ing.textContent = meal.ingredients.join(', ');
     body.appendChild(ing);
   }
 
-  if (meal.keywords && meal.keywords.length) {
+  if (meal.keywords.length) {
     const kw = document.createElement('div');
     kw.className = 'meal-card-keywords';
     kw.innerHTML = meal.keywords.map(k => `<span>${escapeHtml(k)}</span>`).join('');
@@ -336,7 +130,7 @@ function createMealCard(meal) {
     </div>
     <div class="meal-card-extra">
       ${meal.size ? `<span class="meal-card-size">${escapeHtml(meal.size)}</span>` : ''}
-      <span class="meal-card-types">${meal.mealTypes && meal.mealTypes.length ? escapeHtml(meal.mealTypes.join(' / ')) : 'unassigned'}</span>
+      <span class="meal-card-types">${meal.mealTypes.length ? escapeHtml(meal.mealTypes.join(' / ')) : 'unassigned'}</span>
     </div>
   `;
   body.appendChild(meta);
